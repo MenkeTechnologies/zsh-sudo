@@ -25,16 +25,16 @@ sudo-command-line() {
     if [[ -n $EDITOR && $BUFFER == $EDITOR\ * ]]; then
         if (( ${#LBUFFER} <= ${#EDITOR} )); then
             RBUFFER=" ${BUFFER#$EDITOR }"
-            LBUFFER="sudoedit"
+            LBUFFER="$ZPWR_SUDO_CMD $EDITOR"
         else
             LBUFFER="sudoedit ${LBUFFER#$EDITOR }"
         fi
     elif [[ $BUFFER == sudoedit\ * ]]; then
         if (( ${#LBUFFER} <= 8 )); then
-            RBUFFER=" ${BUFFER#sudoedit }"
+            RBUFFER=" ${BUFFER#$ZPWR_SUDO_CMD $EDITOR }"
             LBUFFER="$EDITOR"
         else
-            LBUFFER="$EDITOR ${LBUFFER#sudoedit }"
+            LBUFFER="$EDITOR ${LBUFFER#$ZPWR_SUDO_CMD $EDITOR }"
         fi
     elif [[ $BUFFER == 'sudo '* ]]; then
         if (( ${#LBUFFER} <= 4 )); then
