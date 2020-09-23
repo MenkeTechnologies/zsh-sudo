@@ -7,48 +7,28 @@
 ##### Purpose: zsh script to add sudo back to line
 ##### Notes: 
 #}}}***********************************************************
-if [[ -z "$ZPWR_SUDO_CMD" ]]; then
-    export ZPWR_SUDO_CMD='sudo -E'
-    
+if ! (( $+ZPWR_SUDO_CMD )); then
+    export ZPWR_SUDO_CMD='sudo'
 fi
 
 sudo-command-line() {
-    [[ -z $BUFFER ]] && LBUFFER="$(fc -ln -1)"
+    [[ -z "$BUFFER" ]] && LBUFFER="$(builtin fc -ln -1)"
 
-    # Save beginning space
-    local WHITESPACE=""
-    if [[ ${LBUFFER:0:1} == " " ]] ; then 
-        WHITESPACE=" "
-        LBUFFER="${LBUFFER:1}"
-    fi
-
-    if [[ -n $EDITOR && $BUFFER == $EDITOR\ * ]]; then
-        if (( ${#LBUFFER} <= ${#EDITOR} )); then
-            RBUFFER=" ${BUFFER#$EDITOR }"
-            LBUFFER="$ZPWR_SUDO_CMD $EDITOR"
-        else
-            LBUFFER="sudoedit ${LBUFFER#$EDITOR }"
-        fi
-    elif [[ $BUFFER == sudoedit\ * ]]; then
-        if (( ${#LBUFFER} <= 8 )); then
-            RBUFFER=" ${BUFFER#$ZPWR_SUDO_CMD $EDITOR }"
-            LBUFFER="$EDITOR"
-        else
-            LBUFFER="$EDITOR ${LBUFFER#$ZPWR_SUDO_CMD $EDITOR }"
-        fi
-    elif [[ $BUFFER == 'sudo '* ]]; then
-        if (( ${#LBUFFER} <= 4 )); then
-            RBUFFER="${BUFFER#$ZPWR_SUDO_CMD }"
-            LBUFFER=""
-        else
-            LBUFFER="${LBUFFER#$ZPWR_SUDO_CMD }"
-        fi
+    if [[ $LBUFFER =~ ([[:space:]]*)sudo([[:space:]]*)((-[ABbEHnPSis]+[[:space:]]+|-[CghpTu][[:space:]]*[[:alpha:]]+[[:space:]]*)*)([[:space:]]*)(.*) ]]; then
+        # white space before command
+        ZPWR_SUDO_PRECMD_WS="$match[5]"
+        # sudo wiith all args
+        ZPWR_SUDO_PREV_SUDO_OPTS="sudo$match[2]$match[3]"
+        # white space before sudo and cmd
+        LBUFFER="$match[1]$match[6]"
+    elif [[ $RBUFFER =~ ([[:space:]]*)sudo([[:space:]]*)((-[ABbEHnPSis]+[[:space:]]+|-[CghpTu][[:space:]]*[[:alpha:]]+[[:space:]]*)*)([[:space:]]*)(.*) ]]; then
+        ZPWR_SUDO_PRECMD_WS="$match[5]"
+        ZPWR_SUDO_PREV_SUDO_OPTS="sudo$match[2]$match[3]"
+        RBUFFER="$match[1]$match[6]"
     else
         LBUFFER="$ZPWR_SUDO_CMD $LBUFFER"
     fi
 
-    # Preserve beginning space
-    LBUFFER="${WHITESPACE}${LBUFFER}"
 }
 
 zle -N sudo-command-line
