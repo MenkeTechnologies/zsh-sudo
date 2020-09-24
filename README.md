@@ -1,7 +1,7 @@
 # zsh-sudo
 
 ## Functionality
-If sudo is present on current line it will be removed.  If sudo is not present it will be prepeneded to current line.  If current line is empty then previous command line will be prepended with sudo.
+If sudo is present on current line it will be removed.  If sudo is not present it will be prepended to current line.  If current line is empty then previous command line will be prepended with sudo.
 
 ## Prepend some other sstring
 You can have any string prepended instead of sudo like so:
