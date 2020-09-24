@@ -14,20 +14,16 @@ fi
 sudo-command-line() {
     [[ -z "$BUFFER" ]] && LBUFFER="$(builtin fc -ln -1)"
 
-    if [[ $LBUFFER =~ ([[:space:]]*)sudo([[:space:]]*)((-[ABbEHnPSis]+[[:space:]]+|-[CghpTu][[:space:]]*[[:alpha:]]+[[:space:]]*)*)([[:space:]]*)(.*) ]]; then
-        # white space before command
-        ZPWR_SUDO_PRECMD_WS="$match[5]"
+    if [[ $LBUFFER =~ ^([[:space:]]*)(([\\\"\']*builtin[\\\"\']*[[:space:]]+)*[\\\"\']*command[\\\"\']*)?([[:space:]]*)(([\\\"\']*sudo[\\\"\']*([[:space:]]+)((-[ABbEHnPSis]+[[:space:]]*|-[CghpTu][[:space:]=]+[[:alpha:]]+[[:space:]]+|--)*)*)+([\\\"\']*env[\\\"\']*[[:space:]]+(-[iv]+[[:space:]]*|-[PSu][[:space:]=]+[[:alpha:]]+[[:space:]]+|--)*)*)+(.*)$ ]]; then
         # sudo wiith all args
-        ZPWR_SUDO_PREV_SUDO_OPTS="sudo$match[2]$match[3]"
         # white space before sudo and cmd
-        LBUFFER="$match[1]$match[6]"
-    elif [[ $RBUFFER =~ ([[:space:]]*)sudo([[:space:]]*)((-[ABbEHnPSis]+[[:space:]]+|-[CghpTu][[:space:]]*[[:alpha:]]+[[:space:]]*)*)([[:space:]]*)(.*) ]]; then
-        ZPWR_SUDO_PRECMD_WS="$match[5]"
-        ZPWR_SUDO_PREV_SUDO_OPTS="sudo$match[2]$match[3]"
-        RBUFFER="$match[1]$match[6]"
+        LBUFFER="$match[1]$match[12]"
+    elif [[ $RBUFFER =~ ^([[:space:]]*)(([\\\"\']*builtin[\\\"\']*[[:space:]]+)*[\\\"\']*command[\\\"\']*)?([[:space:]]*)(([\\\"\']*sudo[\\\"\']*([[:space:]]+)((-[ABbEHnPSis]+[[:space:]]*|-[CghpTu][[:space:]=]+[[:alpha:]]+[[:space:]]+|--)*)*)+([\\\"\']*env[\\\"\']*[[:space:]]+(-[iv]+[[:space:]]*|-[PSu][[:space:]=]+[[:alpha:]]+[[:space:]]+|--)*)*)+(.*)$ ]]; then
+        RBUFFER="$match[1]$match[12]"
     else
         LBUFFER="$ZPWR_SUDO_CMD $LBUFFER"
     fi
+
 
 }
 
