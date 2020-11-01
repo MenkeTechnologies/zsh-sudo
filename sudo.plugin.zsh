@@ -16,11 +16,12 @@ if ! (( $+ZPWR_SUDO_REGEX )); then
 fi
 
 sudo-command-line() {
+
     [[ -z "$BUFFER" ]] && LBUFFER="$(builtin fc -ln -1)"
 
     # notice in this regex how 1 or more required sudo
     if [[ $LBUFFER =~ ^([[:space:]]*)([[:graph:]]+=[[:graph:]]+[[:space:]]+)*(([\\\"\']*builtin[\\\"\']*[[:space:]]+)*[\\\"\']*command[\\\"\']*)?([[:space:]]*)(([\\\"\']*"$ZPWR_SUDO_REGEX"[\\\"\']*([[:space:]]+)((-[ABbEHnPSis]+[[:space:]]*|-[CghpTu][[:space:]=]+[[:graph:]]+[[:space:]]+|--)*)*)+([\\\"\']*env[\\\"\']*[[:space:]]+(-[iv]+[[:space:]]*|-[PSu][[:space:]=]+[[:graph:]]+[[:space:]]+|--)*)*([[:graph:]]+=[[:graph:]]+[[:space:]]+)*)+([[:space:]])*(.*)$ ]]; then
-        # sudo wiith all args
+        # sudo with all args
         # white space before sudo and cmd
         LBUFFER="$match[1]$match[-1]"
     # notice in this regex how 1 or more required sudo
