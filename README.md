@@ -11,6 +11,7 @@
 
 **`[ ELEVATE YOUR COMMAND LINE // JACK INTO ROOT ]`**
 
+[![CI](https://github.com/MenkeTechnologies/zsh-sudo/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zsh-sudo/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/LICENSE-OPEN__SOURCE-ff00ff?style=flat-square&labelColor=0d0d0d)](.)
 [![Shell](https://img.shields.io/badge/SHELL-ZSH-00ffff?style=flat-square&labelColor=0d0d0d)](.)
 [![Status](https://img.shields.io/badge/STATUS-ONLINE-39ff14?style=flat-square&labelColor=0d0d0d)](.)
