@@ -1,5 +1,3 @@
-<div align="center">
-
 ```
  ███████╗███████╗██╗  ██╗      ███████╗██╗   ██╗██████╗  ██████╗
  ╚══███╔╝██╔════╝██║  ██║      ██╔════╝██║   ██║██╔══██╗██╔═══██╗
@@ -9,24 +7,29 @@
  ╚══════╝╚══════╝╚═╝  ╚═╝      ╚══════╝ ╚═════╝ ╚═════╝  ╚═════╝
 ```
 
-**`[ ELEVATE YOUR COMMAND LINE // JACK INTO ROOT ]`**
-
 [![CI](https://github.com/MenkeTechnologies/zsh-sudo/actions/workflows/ci.yml/badge.svg)](https://github.com/MenkeTechnologies/zsh-sudo/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/LICENSE-OPEN__SOURCE-ff00ff?style=flat-square&labelColor=0d0d0d)](.)
-[![Shell](https://img.shields.io/badge/SHELL-ZSH-00ffff?style=flat-square&labelColor=0d0d0d)](.)
-[![Status](https://img.shields.io/badge/STATUS-ONLINE-39ff14?style=flat-square&labelColor=0d0d0d)](.)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
+
+### `[ESC ESC TO PREPEND sudo TO THE CURRENT COMMAND LINE]`
+
+> *"Two `Esc` keypresses — your last command, with sudo."*
+
+### [`strykelang`](https://github.com/MenkeTechnologies/strykelang) &middot; [`zshrs`](https://github.com/MenkeTechnologies/zshrs) · [`MenkeTechnologiesMeta`](https://github.com/MenkeTechnologies/MenkeTechnologiesMeta) · [`zsh-sed-sub`](https://github.com/MenkeTechnologies/zsh-sed-sub) · [`zsh-git-acp`](https://github.com/MenkeTechnologies/zsh-git-acp) · [`zsh-more-completions`](https://github.com/MenkeTechnologies/zsh-more-completions) · [`zpwr`](https://github.com/MenkeTechnologies/zpwr)
 
 ---
 
-```
-> INITIALIZING NEURAL LINK...
-> SUDO MODULE LOADED
-> AWAITING INPUT_
-```
+## Table of Contents
 
-</div>
+- [\[0x00\] `// WHAT IS THIS`](#0x00-what-is-this)
+- [\[0x01\] `// INSTALL`](#0x01-install)
+- [\[0x02\] `// KEYBIND`](#0x02-keybind)
+- [\[0x03\] `// CONFIG`](#0x03-config)
+- [\[0x04\] `// HOW IT WORKS`](#0x04-how-it-works)
 
-## `// WHAT IS THIS`
+---
+
+## [0x00] `// WHAT IS THIS`
 
 A ZSH widget that toggles `sudo` on your current command line with a single keybind. No retyping. No arrow keys. Just pure privilege escalation at the speed of thought.
 
@@ -38,7 +41,7 @@ A ZSH widget that toggles `sudo` on your current command line with a single keyb
 
 ---
 
-## `// INSTALL`
+## [0x01] `// INSTALL`
 
 ### Zinit
 
@@ -63,7 +66,7 @@ source /path/to/sudo.plugin.zsh
 
 ---
 
-## `// KEYBIND`
+## [0x02] `// KEYBIND`
 
 Wire up the ZLE widget to whatever key combo jacks you in fastest:
 
@@ -73,7 +76,7 @@ bindkey '^N' sudo-command-line
 
 ---
 
-## `// CONFIG`
+## [0x03] `// CONFIG`
 
 Override the default `sudo` string by exporting these before the plugin loads:
 
@@ -86,7 +89,7 @@ export ZPWR_SUDO_CMD='doas'
 
 ---
 
-## `// HOW IT WORKS`
+## [0x04] `// HOW IT WORKS`
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -102,15 +105,3 @@ The regex engine handles edge cases like quoted commands, `builtin`/`command` pr
 
 ---
 
-<div align="center">
-
-```
- ╔══════════════════════════════════════════╗
- ║  CREATED BY >> MenkeTechnologies        ║
- ║  https://github.com/MenkeTechnologies   ║
- ╚══════════════════════════════════════════╝
-```
-
-**`[ END OF LINE ]`**
-
-</div>
