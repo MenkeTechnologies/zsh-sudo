@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="description" content="zsh-sudo — Engineering report. 38-LOC ZLE widget that toggles sudo on the current command-line BUFFER. Two parallel regexes against LBUFFER then RBUFFER catch builtin/command/env prefixes, var-assignments, stacked -E/-H/-i/-n/-u flags, quoted command words. Empty-BUFFER pulls the previous fc -ln -1 entry. 101 zunit @test cases.">
+  <title>zsh-sudo &mdash; Engineering Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&amp;family=Share+Tech+Mono&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="hud-static.css">
+  <link rel="stylesheet" href="tutorial.css">
+  <style>
+    .tutorial-main { max-width: 72rem; }
+    .bar-wrap { background:var(--bg-primary);border:1px solid var(--border);border-radius:2px;height:18px;position:relative;overflow:hidden; }
+    .bar-fill { height:100%;border-radius:1px;transition:width 1.2s cubic-bezier(.22,1,.36,1); }
+    .bar-fill.green  { background:linear-gradient(90deg,#39ff14,#20c00a);box-shadow:0 0 8px rgba(57,255,20,.4); }
+    .bar-fill.cyan   { background:linear-gradient(90deg,#05d9e8,#0891b2);box-shadow:0 0 8px rgba(5,217,232,.4); }
+    .bar-fill.magenta{ background:linear-gradient(90deg,#d300c5,#a000a0);box-shadow:0 0 8px rgba(211,0,197,.35); }
+    .bar-pct { position:absolute;right:6px;top:0;line-height:18px;font-size:10px;font-weight:700;color:#fff;text-shadow:0 0 4px #000;font-family:'Orbitron',sans-serif; }
+    .file-table { width:100%;border-collapse:collapse;margin:0.6rem 0;font-size:12px; }
+    .file-table th { background:var(--bg-secondary);color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;text-align:left;padding:7px 10px;border:1px solid var(--border); }
+    .file-table td { padding:6px 10px;border:1px solid var(--border);color:var(--text-dim);vertical-align:middle; }
+    .file-table tr:hover td { background:var(--bg-hover); }
+    .file-table td:first-child { font-family:'Share Tech Mono',monospace;color:var(--accent-light);font-weight:600;white-space:nowrap; }
+    .file-table .num { text-align:right;font-family:'Share Tech Mono',monospace; }
+    .file-table .total-row td { background:var(--bg-secondary);font-weight:700;color:var(--text);border-top:2px solid var(--cyan); }
+    .file-table code { font-size:11px;color:var(--accent-light);background:var(--bg-primary);padding:1px 4px;border-radius:2px; }
+    .stat-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(13rem,1fr));gap:0.75rem;margin:1.2rem 0; }
+    .stat-card { border:1px solid var(--border);border-top:3px solid var(--cyan);background:var(--bg-card);padding:1rem 1.2rem;border-radius:2px;text-align:center; }
+    .stat-card .stat-val { font-family:'Orbitron',sans-serif;font-size:26px;font-weight:900;color:var(--cyan);line-height:1.1;text-shadow:0 0 20px var(--cyan-glow); }
+    .stat-card .stat-val.accent { color:var(--accent);text-shadow:0 0 20px var(--accent-glow); }
+    .stat-card .stat-val.green  { color:var(--green);text-shadow:0 0 20px rgba(57,255,20,.3); }
+    .stat-card .stat-label { font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text-muted);margin-top:0.5rem; }
+    @keyframes glow-pulse { 0%,100%{text-shadow:0 0 20px var(--cyan-glow)}50%{text-shadow:0 0 40px var(--cyan-glow),0 0 80px var(--cyan-dim)} }
+    .stat-card .stat-val { animation:glow-pulse 3s ease-in-out infinite; }
+    .mapping-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(20rem,1fr));gap:0.65rem;margin:0.8rem 0; }
+    .mapping-card { border:1px solid var(--border);border-left:3px solid var(--magenta);background:var(--bg-card);padding:0.6rem 0.9rem;border-radius:2px; }
+    .mapping-card h4 { font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--magenta);margin:0 0 0.3rem; }
+    .mapping-card p { margin:0;font-size:11px;color:var(--text-dim);line-height:1.5; }
+    .mapping-card code { font-size:10.5px;color:var(--accent-light);background:var(--bg-primary);padding:1px 4px;border-radius:2px; }
+    .section-rule { border:none;border-top:1px dashed var(--border);margin:2rem 0; }
+    .feature-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(22rem,1fr));gap:0.65rem;margin:0.8rem 0; }
+    .feature-card { border:1px solid var(--border);border-left:3px solid var(--cyan);background:var(--bg-card);padding:0.7rem 1rem;border-radius:2px; }
+    .feature-card h4 { font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--cyan);margin:0 0 0.3rem; }
+    .feature-card p { margin:0;font-size:11px;color:var(--text-dim);line-height:1.55; }
+    .feature-card code { font-size:10.5px;color:var(--accent-light);background:var(--bg-primary);padding:1px 4px;border-radius:2px; }
+    pre.flow { margin:0.5rem 0;padding:1rem;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-dim);font-size:11px;line-height:1.55;overflow-x:auto;font-family:'Share Tech Mono',monospace; }
+  </style>
+</head>
+<body>
+  <div class="app tutorial-app" id="reportApp">
+    <div class="crt-scanline" id="crtH" aria-hidden="true"></div>
+    <div class="crt-scanline-v" id="crtV" aria-hidden="true"></div>
+
+    <header class="tutorial-header">
+      <div class="tutorial-header-inner">
+        <div>
+          <h1 class="tutorial-brand">// ZSH-SUDO &mdash; ENGINEERING REPORT</h1>
+          <nav class="tutorial-crumbs" aria-label="Breadcrumb">
+            <span class="current">Engineering Report</span>
+            <span class="sep">/</span>
+            <a href="index.html">Docs</a>
+            <span class="sep">/</span>
+            <a href="https://github.com/MenkeTechnologies/zsh-sudo" target="_blank" rel="noopener noreferrer">GitHub</a>
+            <span class="sep">/</span>
+            <a href="https://github.com/MenkeTechnologies/zpwr" target="_blank" rel="noopener noreferrer">zpwr</a>
+          </nav>
+          <p style="margin:0.35rem 0 0;font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text-dim);letter-spacing:0.03em;opacity:0.75;">
+            zsh plugin &middot; ZLE widget &middot; toggles <code>sudo</code> on the current command line &middot; LBUFFER then RBUFFER strip &middot; <code>fc -ln -1</code> empty-BUFFER recall &middot; configurable command + regex
+          </p>
+        </div>
+        <div class="tutorial-toolbar">
+          <button type="button" class="btn btn-secondary" id="btnTheme" title="Toggle light/dark">Theme</button>
+          <button type="button" class="btn btn-secondary active" id="btnCrt" title="CRT scanline overlay">CRT</button>
+          <button type="button" class="btn btn-secondary active" id="btnNeon" title="Neon border pulse">Neon</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="tutorial-main">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 1: EXECUTIVE SUMMARY           -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">&gt;_</span>EXECUTIVE SUMMARY</h2>
+      <p class="tutorial-subtitle">zsh-sudo registers one ZLE widget &mdash; <code>sudo-command-line</code> &mdash; that toggles <code>sudo</code> on the current command line. The widget runs in three modes: (1) BUFFER empty &rarr; pull the previous command via <code>builtin fc -ln -1</code> and prepend; (2) BUFFER already starts with sudo (after any leading whitespace, var-assignments, <code>builtin</code>/<code>command</code>/<code>env</code> wrappers, and stacked sudo flags) &rarr; strip the whole prefix; (3) otherwise &rarr; prepend <code>$ZPWR_SUDO_CMD</code>. The matching is two parallel regex patterns: one against <code>$LBUFFER</code> (cursor at or after sudo), one against <code>$RBUFFER</code> (cursor before sudo) &mdash; so the toggle works regardless of where the user's cursor sits on a long line. Both the command word and the regex are environment-configurable so the same widget works for <code>doas</code>, <code>please</code>, <code>run0</code>, or any other privilege-escalation tool.</p>
+
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-val">38</div><div class="stat-label">Plugin LOC</div></div>
+        <div class="stat-card"><div class="stat-val accent">1</div><div class="stat-label">ZLE Widget</div></div>
+        <div class="stat-card"><div class="stat-val">2</div><div class="stat-label">Env Vars</div></div>
+        <div class="stat-card"><div class="stat-val">2</div><div class="stat-label">Match Sides (L/R)</div></div>
+        <div class="stat-card"><div class="stat-val green">101</div><div class="stat-label">zunit @test Cases</div></div>
+        <div class="stat-card"><div class="stat-val">6</div><div class="stat-label">Test Files</div></div>
+        <div class="stat-card"><div class="stat-val">21</div><div class="stat-label">Docs/Repo Gates</div></div>
+        <div class="stat-card"><div class="stat-val">34</div><div class="stat-label">Git Commits</div></div>
+      </div>
+
+      <div style="margin:1.2rem 0;">
+        <p style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;font-family:'Orbitron',sans-serif;font-weight:700;">Test Density &mdash; 101 cases against 38 LOC</p>
+        <div class="bar-wrap" style="height:24px;">
+          <div class="bar-fill green" style="width:100%;"></div>
+          <span class="bar-pct" style="font-size:12px;">2.66 zunit @test cases per LOC of widget body</span>
+        </div>
+        <p style="font-size:10px;color:var(--text-muted);margin-top:4px;">The widget is small but every code path is a regex branch that must hold across edge cases &mdash; quoted commands, env-prefixed runs, stacked sudo flags, var-assignments before sudo, custom command names, RBUFFER-side matches. Test density tracks the regex's branching: <code>t-sudo-command-line.zsh</code> alone carries 81 cases.</p>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 2: FILE STRUCTURE              -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">#</span>FILE STRUCTURE</h2>
+      <table class="file-table">
+        <thead><tr><th>File</th><th class="num">Lines</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td>sudo.plugin.zsh</td><td class="num">38</td><td>Entrypoint + widget body. <code>ZPWR_SUDO_CMD</code> + <code>ZPWR_SUDO_REGEX</code> defaults, <code>sudo-command-line</code> fn (empty-BUFFER recall + LBUFFER regex strip + RBUFFER regex strip + prepend fallthrough), <code>zle -N sudo-command-line</code></td></tr>
+        </tbody>
+        <tfoot><tr class="total-row"><td>1 source file</td><td class="num">38</td><td>Single-file plugin</td></tr></tfoot>
+      </table>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">No <code>autoload/</code>, no <code>src/</code>, no <code>completions/</code> directory. The whole plugin is one file. The keybinding itself is intentionally <strong>not</strong> set by the plugin &mdash; the README documents the canonical pattern (<code>bindkey '^N' sudo-command-line</code>) but leaves the user to choose their chord. The widely-published "Esc Esc" binding in oh-my-zsh's stock sudo plugin is one of many valid choices; this plugin doesn't force one.</p>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 3: ENV CONTRACT                 -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">$</span>ENV CONTRACT</h2>
+      <p class="tutorial-subtitle">Two env vars, both only set when unset. The user controls the strip-and-prepend tool by exporting these <em>before</em> sourcing the plugin.</p>
+
+      <table class="file-table">
+        <thead><tr><th>Env var</th><th>Default</th><th>Role</th></tr></thead>
+        <tbody>
+          <tr><td>ZPWR_SUDO_CMD</td><td><code>sudo</code></td><td>String prepended to the buffer when there's nothing to strip. Set to <code>doas</code>, <code>please</code>, etc. to use a different privilege-escalation tool.</td></tr>
+          <tr><td>ZPWR_SUDO_REGEX</td><td><code>sudo</code></td><td>Regex fragment the strip-side hunts for. Should match <code>ZPWR_SUDO_CMD</code> in practice. Decoupled from the prepend string so the regex can support alternation (e.g. <code>(sudo|doas)</code>) without forcing the prepend to pick one.</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">Both vars are guarded by <code>(( $+ZPWR_SUDO_CMD ))</code> / <code>(( $+ZPWR_SUDO_REGEX ))</code>, so re-sourcing the plugin won't clobber a user override and the unset path is the only path that writes a default.</p>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 4: WIDGET FLOW                  -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">@</span>WIDGET FLOW</h2>
+      <p class="tutorial-subtitle">Single fn, three branches. Order is fixed: empty-BUFFER recall first, then LBUFFER strip attempt, then RBUFFER strip attempt, then unconditional prepend. The LBUFFER/RBUFFER split is the load-bearing trick &mdash; it preserves cursor position on long lines.</p>
+
+      <pre class="flow">
+  ^X invoked (any keybinding chosen by user)
+       │
+       ▼
+  ┌──────────────────────────────────────┐
+  │ BUFFER empty?                        │
+  │   yes → LBUFFER = "$(fc -ln -1)"     │ ← pull last cmd from history
+  │   no  → leave BUFFER as-is           │
+  └────────────────┬─────────────────────┘
+                   │
+                   ▼
+  ┌──────────────────────────────────────┐
+  │ LBUFFER matches sudo-prefix regex?   │
+  │   yes → LBUFFER = "$match[1]$match[-1]"  │ ← strip whole prefix
+  │   no  → fallthrough                  │     keep leading whitespace
+  └────────────────┬─────────────────────┘     + post-sudo command
+                   │
+                   ▼ (no LBUFFER match)
+  ┌──────────────────────────────────────┐
+  │ RBUFFER matches sudo-prefix regex?   │
+  │   yes → RBUFFER = "$match[1]$match[-1]"  │
+  │   no  → fallthrough                  │
+  └────────────────┬─────────────────────┘
+                   │
+                   ▼ (neither side matched)
+  ┌──────────────────────────────────────┐
+  │ LBUFFER = "$ZPWR_SUDO_CMD $LBUFFER"  │ ← unconditional prepend
+  └──────────────────────────────────────┘</pre>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">The cursor doesn't move on toggle &mdash; <code>$LBUFFER</code> and <code>$RBUFFER</code> are zsh's split of the command line at the cursor position, so editing the side the cursor isn't on preserves the cursor's column. This is what makes the widget feel like a true toggle: hit the chord twice and you're back where you started, character-for-character.</p>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 5: REGEX ANATOMY                -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">&amp;</span>REGEX ANATOMY</h2>
+      <p class="tutorial-subtitle">One regex pattern, applied twice (LBUFFER + RBUFFER). It's a 700-character beast covering 8 grammar classes of "this counts as a sudo invocation." Each class below is a section of the pattern; the strip path drops everything matched and leaves <code>$match[1]</code> (leading whitespace) + <code>$match[-1]</code> (the trailing command and its args).</p>
+
+      <table class="file-table">
+        <thead><tr><th>Pattern fragment</th><th>Catches</th></tr></thead>
+        <tbody>
+          <tr><td><code>^([[:space:]]*)</code></td><td>Leading whitespace (preserved as <code>$match[1]</code>)</td></tr>
+          <tr><td><code>([[:graph:]]+=[[:graph:]]+[[:space:]]+)*</code></td><td>Var assignments before sudo: <code>FOO=bar BAR=baz sudo cmd</code></td></tr>
+          <tr><td><code>(([\\\"\']*builtin[\\\"\']*[[:space:]]+)*[\\\"\']*command[\\\"\']*)?</code></td><td>Optional <code>builtin</code> + <code>command</code> wrapper words, possibly quoted</td></tr>
+          <tr><td><code>[\\\"\']*"$ZPWR_SUDO_REGEX"[\\\"\']*</code></td><td>The sudo command name itself, optionally quoted; pluggable via env var</td></tr>
+          <tr><td><code>(-[ABbEHnPSis]+[[:space:]]*|-[CghpTu][[:space:]=]+[[:graph:]]+[[:space:]]+|--)*</code></td><td>Sudo flags &mdash; both boolean stacks (<code>-Eis</code>) and value flags (<code>-u root</code>, <code>-g wheel</code>); <code>--</code> terminator</td></tr>
+          <tr><td><code>([\\\"\']*env[\\\"\']*[[:space:]]+(-[iv]+[[:space:]]*|-[PSu][[:space:]=]+[[:graph:]]+[[:space:]]+|--)*)*</code></td><td>An optional <code>env</code> wrapper between sudo and the real command, with its own flag set</td></tr>
+          <tr><td><code>([[:graph:]]+=[[:graph:]]+[[:space:]]+)*</code></td><td>Var assignments between sudo/env and the real command</td></tr>
+          <tr><td><code>(.*)$</code></td><td>The actual command and its args (preserved as <code>$match[-1]</code>)</td></tr>
+        </tbody>
+      </table>
+
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">The regex requires <code>(...)+</code> on the sudo block so at least one sudo invocation must match for the strip path to fire. This is why the toggle <em>never</em> false-positive-strips a non-sudo command, even one that happens to contain literal whitespace and var-assignments.</p>
+
+      <h3 style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--accent);letter-spacing:1.5px;margin:1.5rem 0 0.5rem;">// SUDO FLAGS COVERED</h3>
+      <table class="file-table">
+        <thead><tr><th>Class</th><th>Flags</th><th>Spec</th></tr></thead>
+        <tbody>
+          <tr><td>Boolean (stackable)</td><td><code>-A -B -b -E -H -n -P -S -i -s</code></td><td>Per <code>sudo(8)</code>: no-arg flags that can be stacked (<code>-Eis</code>)</td></tr>
+          <tr><td>Value-bearing</td><td><code>-C -g -h -p -T -u</code></td><td>Take an argument: <code>-u root</code>, <code>-g wheel</code>, <code>-p 'prompt'</code></td></tr>
+          <tr><td>Option terminator</td><td><code>--</code></td><td>End-of-options marker before the command word</td></tr>
+        </tbody>
+      </table>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 6: EXAMPLE TRANSFORMS           -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">~</span>EXAMPLE TRANSFORMS</h2>
+      <p class="tutorial-subtitle">Toggle behaviour across the cases the regex is built to cover. Each row is one widget invocation, before &rarr; after.</p>
+
+      <table class="file-table">
+        <thead><tr><th>Before</th><th>After</th></tr></thead>
+        <tbody>
+          <tr><td><code>apt update</code></td><td><code>sudo apt update</code></td></tr>
+          <tr><td><code>sudo apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td>(empty)</td><td><code>sudo &lt;previous fc -ln -1 entry&gt;</code></td></tr>
+          <tr><td><code>sudo -u root apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td><code>sudo -Eis bash</code></td><td><code>bash</code></td></tr>
+          <tr><td><code>sudo -- apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td><code>FOO=bar sudo apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td><code>sudo env -i bash</code></td><td><code>bash</code></td></tr>
+          <tr><td><code>sudo env FOO=bar apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td><code>command sudo apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td><code>builtin command sudo apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td><code>"sudo" apt update</code></td><td><code>apt update</code></td></tr>
+          <tr><td>(with <code>ZPWR_SUDO_CMD=doas</code>) <code>apt update</code></td><td><code>doas apt update</code></td></tr>
+        </tbody>
+      </table>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 7: LBUFFER VS RBUFFER          -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">!</span>LBUFFER VS RBUFFER</h2>
+      <p class="tutorial-subtitle">ZLE splits the command line at the cursor: text to the left is in <code>$LBUFFER</code>, text to the right is in <code>$RBUFFER</code>. The widget runs the strip regex against <code>$LBUFFER</code> first, then falls through to <code>$RBUFFER</code> on no match. Toggling works at <strong>any cursor position</strong>.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4>Cursor after sudo</h4>
+          <p>Common case: typed <code>sudo apt update</code>, cursor at the end. <code>$LBUFFER</code> is the whole line; LBUFFER regex matches; the strip fires on the left half. <code>$RBUFFER</code> stays empty.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Cursor inside sudo flags</h4>
+          <p>User typed <code>sudo -u root apt update</code>, then hit <code>^A</code> + a few arrows to land inside the flag block. <code>$LBUFFER</code> ends mid-sudo (no match); <code>$RBUFFER</code> contains the trailing chunk including sudo &mdash; nope. The fallthrough kicks in and prepends another sudo &mdash; arguably wrong, but matches the user's intent "I'm adding privilege escalation." Place cursor at start or end for clean toggle.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Cursor at line start</h4>
+          <p>Just typed something, hit <code>^A</code>. <code>$LBUFFER</code> empty; <code>$RBUFFER</code> is the whole line. RBUFFER regex matches; the strip fires on the right half. Cursor stays at column 0.</p>
+        </div>
+        <div class="feature-card">
+          <h4>Toggle preserves position</h4>
+          <p>Because the rewrite happens on whichever side matched (not the whole BUFFER), the cursor's logical position is unchanged. Hit the chord twice &rarr; back to the original line, character-for-character, cursor at the same column.</p>
+        </div>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 8: TEST COVERAGE                -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">*</span>TEST COVERAGE</h2>
+      <p class="tutorial-subtitle">101 zunit <code>@test</code> cases across 6 test files. The heaviest is <code>t-sudo-command-line.zsh</code> at 81 cases &mdash; every regex branch is pinned by at least one before/after pair plus a no-op pair (calling the widget twice should round-trip). The remaining 5 files pin structural contracts: widget registration, env-var defaults, idempotent re-source, entrypoint stem, syntax cleanliness.</p>
+
+      <table class="file-table">
+        <thead><tr><th>Test file</th><th class="num">@test</th><th>Pins</th></tr></thead>
+        <tbody>
+          <tr><td>tests/t-sudo-command-line.zsh</td><td class="num">81</td><td>Every regex branch: empty BUFFER + history recall; prepend on plain command; strip on plain sudo; strip on sudo with stacked flags; strip on sudo with value flag; strip on var-prefixed sudo; strip on env-wrapped sudo; strip on builtin/command-wrapped sudo; strip on quoted sudo; round-trip preservation; LBUFFER vs RBUFFER coverage; custom ZPWR_SUDO_CMD; alternation in ZPWR_SUDO_REGEX</td></tr>
+          <tr><td>tests/t-contract2.zsh</td><td class="num">6</td><td><code>zle -N sudo-command-line</code> registers the widget; widget name appears in <code>$widgets</code></td></tr>
+          <tr><td>tests/t-contract3.zsh</td><td class="num">5</td><td><code>ZPWR_SUDO_CMD</code> + <code>ZPWR_SUDO_REGEX</code> default to <code>sudo</code> when unset; existing values are not clobbered on re-source</td></tr>
+          <tr><td>tests/t-contract4.zsh</td><td class="num">5</td><td>Entrypoint stem (<code>sudo.plugin.zsh</code>) matches plugin directory; idempotent re-source</td></tr>
+          <tr><td>tests/t-contract.zsh</td><td class="num">3</td><td>Entrypoint parses cleanly under <code>zsh -n</code>; every <code>_*</code> completion file (vacuously zero) starts with <code>#compdef</code></td></tr>
+          <tr><td>tests/t-syntax.zsh</td><td class="num">1</td><td>Entrypoint parses under <code>zsh -n</code></td></tr>
+        </tbody>
+        <tfoot><tr class="total-row"><td>6 zunit files</td><td class="num">101</td><td>+ 21 <code>.sh</code> doc-hygiene gates</td></tr></tfoot>
+      </table>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 9: KEY DESIGN DECISIONS         -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">?</span>KEY DESIGN DECISIONS</h2>
+      <p class="tutorial-subtitle">Each call-out is a decision the implementation could have gone either way on, with the rationale for the path taken.</p>
+
+      <div class="feature-grid">
+        <div class="feature-card"><h4>Two regex passes, not one</h4><p>The widget runs the strip regex twice: once against <code>$LBUFFER</code>, once against <code>$RBUFFER</code>. Single-pass against the whole <code>$BUFFER</code> would lose cursor position; the split-and-test pattern is what makes the toggle feel like a true in-place edit.</p></div>
+        <div class="feature-card"><h4>One regex, not seven small ones</h4><p>The 700-character pattern handles every case in one match. Breaking it into per-case regexes would mean ordering decisions (which case wins on ambiguity?) and would duplicate the leading <code>[[:space:]]*</code> + var-assignment + builtin/command framing across every variant.</p></div>
+        <div class="feature-card"><h4>Decoupled CMD and REGEX env vars</h4><p>The prepend string is one var; the strip pattern is another. Lets the strip side support alternation (<code>(sudo|doas)</code>) while the prepend side picks one canonical tool. Most users set both to the same string; power users get the flexibility.</p></div>
+        <div class="feature-card"><h4>No bundled keybinding</h4><p>The plugin registers the widget but does <strong>not</strong> bind a key. The user picks their chord. Stock oh-my-zsh sudo binds Esc Esc; this plugin doesn't force that choice because Esc Esc can conflict with vi-mode users hitting double-Esc to leave insert mode.</p></div>
+        <div class="feature-card"><h4><code>builtin fc -ln -1</code> for history recall</h4><p><code>fc -ln -1</code> prints the most recent history entry with no leading line number and no trailing newline &mdash; exactly the shape needed for direct LBUFFER assignment. <code>builtin</code> guards against user aliasing of <code>fc</code>.</p></div>
+        <div class="feature-card"><h4>Var-assignment support</h4><p><code>FOO=bar sudo cmd</code> is a real pattern (env-vars-for-sudo). The regex preserves the assignments through the strip so toggling on <code>FOO=bar sudo cmd</code> gives <code>FOO=bar cmd</code> &mdash; not <code>cmd</code>. The user keeps their env intent.</p></div>
+        <div class="feature-card"><h4>Quoted sudo support</h4><p>Each occurrence of the sudo command is wrapped in <code>[\\\"\']*</code> &mdash; matches bare, backslash-escaped, double-quoted, and single-quoted sudo names. Real scripts run <code>"sudo" apt update</code> for various reasons; the toggle handles all of them.</p></div>
+        <div class="feature-card"><h4>Single-file plugin</h4><p>No autoload, no completions, no extra files. The widget body is small enough that splitting into <code>autoload/sudo-command-line</code> would add ceremony without value. One file, one widget, one fn.</p></div>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 10: STRATEGIC POSITION          -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">.</span>STRATEGIC POSITION</h2>
+      <p class="tutorial-subtitle">Smallest plugin in the stack by LOC, and arguably the highest invocations-per-day. Privilege escalation comes up dozens of times in a sysadmin shell session; a one-chord toggle saves the entire "up-arrow, home, type sudo space, end, enter" dance every single time.</p>
+
+      <div class="mapping-grid">
+        <div class="mapping-card"><h4>Forgot sudo</h4><p>Ran <code>apt update</code>, got <code>Permission denied</code>. Hit the chord on empty BUFFER &rarr; <code>sudo apt update</code>. Hit Enter.</p></div>
+        <div class="mapping-card"><h4>Wrong sudo flag</h4><p>Typed <code>sudo -u nobody apt update</code> and meant <code>sudo apt update</code>. Hit the chord (strip) + chord (re-prepend) &rarr; clean <code>sudo apt update</code>.</p></div>
+        <div class="mapping-card"><h4>Cross-tool compat</h4><p>Configured for <code>doas</code> on an OpenBSD box and <code>sudo</code> on Linux. Same chord, same UX, no muscle-memory tax across machines.</p></div>
+        <div class="mapping-card"><h4>Plugin stack hub</h4><p>One of 5 plugins under <code>MenkeTechnologiesMeta</code>. The smallest by LOC but the canonical example of "one fn, one chord, BUFFER rewrite" &mdash; the same shape as <code>zsh-sed-sub</code>, <code>zsh-expand</code>, and <code>zsh-git-acp</code>.</p></div>
+      </div>
+
+      <hr class="section-rule">
+
+      <!-- ═══════════════════════════════════════ -->
+      <!-- SECTION 11: COMPAT                      -->
+      <!-- ═══════════════════════════════════════ -->
+      <h2 class="tutorial-title"><span class="step-hash">+</span>COMPAT</h2>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">Hard deps: <code>zsh</code> 5.x+ with ZLE; no external tool deps &mdash; the widget runs entirely within zsh's match engine. <code>builtin fc</code> is a core zsh builtin, always available. Compat with <code>doas</code>, <code>please</code>, <code>run0</code>, <code>pkexec</code>, or any other prepend-style escalation tool by setting <code>ZPWR_SUDO_CMD</code> + <code>ZPWR_SUDO_REGEX</code>. No OS-specific behaviour &mdash; identical on macOS, Linux, BSD, WSL.</p>
+
+    </main>
+
+    <footer style="text-align:center;padding:2rem;font-size:10px;color:var(--text-muted);font-family:'Orbitron',sans-serif;letter-spacing:2px;">
+      ZSH-SUDO ENGINEERING REPORT &middot; 38 PLUGIN LOC &middot; 1 ZLE WIDGET &middot; 2 ENV VARS &middot; LBUFFER + RBUFFER STRIP &middot; 101 ZUNIT TESTS &middot; 21 DOC GATES &middot; MENKETECHNOLOGIES
+    </footer>
+  </div>
+
+  <script>
+    const html = document.documentElement;
+    const btnTheme = document.getElementById('btnTheme');
+    const btnCrt = document.getElementById('btnCrt');
+    const btnNeon = document.getElementById('btnNeon');
+    const crtH = document.getElementById('crtH');
+    const crtV = document.getElementById('crtV');
+    btnTheme?.addEventListener('click', () => {
+      html.setAttribute('data-theme', html.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
+    });
+    btnCrt?.addEventListener('click', () => {
+      btnCrt.classList.toggle('active');
+      const on = btnCrt.classList.contains('active');
+      if (crtH) crtH.style.display = on ? '' : 'none';
+      if (crtV) crtV.style.display = on ? '' : 'none';
+    });
+    btnNeon?.addEventListener('click', () => {
+      btnNeon.classList.toggle('active');
+      document.querySelector('.app')?.classList.toggle('neon-off');
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+      document.querySelectorAll('.bar-fill').forEach(bar => {
+        const w = bar.style.width;
+        bar.style.width = '0';
+        requestAnimationFrame(() => { requestAnimationFrame(() => { bar.style.width = w; }); });
+      });
+    });
+  </script>
+</body>
+</html>
