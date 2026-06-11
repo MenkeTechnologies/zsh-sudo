@@ -11,9 +11,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![zsh](https://img.shields.io/badge/zsh-plugin-cyan.svg)](https://github.com/MenkeTechnologies/zpwr)
 
-### `[ESC ESC TO PREPEND sudo TO THE CURRENT COMMAND LINE]`
+### `[ONE KEYBIND TO TOGGLE sudo ON THE CURRENT COMMAND LINE]`
 
-> *"Two `Esc` keypresses — your last command, with sudo."*
+> *"One keypress — your last command, with sudo."*
 
 ### [`strykelang`](https://github.com/MenkeTechnologies/strykelang) &middot; [`zshrs`](https://github.com/MenkeTechnologies/zshrs) · [`MenkeTechnologiesMeta`](https://github.com/MenkeTechnologies/MenkeTechnologiesMeta) · [`zsh-sed-sub`](https://github.com/MenkeTechnologies/zsh-sed-sub) · [`zsh-git-acp`](https://github.com/MenkeTechnologies/zsh-git-acp) · [`zsh-more-completions`](https://github.com/MenkeTechnologies/zsh-more-completions) · [`zpwr`](https://github.com/MenkeTechnologies/zpwr)
 
