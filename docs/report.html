@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark light">
-  <meta name="description" content="zsh-sudo — Engineering report. 38-LOC ZLE widget that toggles sudo on the current command-line BUFFER. Two parallel regexes against LBUFFER then RBUFFER catch builtin/command/env prefixes, var-assignments, stacked -E/-H/-i/-n/-u flags, quoted command words. Empty-BUFFER pulls the previous fc -ln -1 entry. 101 zunit @test cases.">
+  <meta name="description" content="zsh-sudo — Engineering report. 38-LOC ZLE widget that toggles sudo on the current command-line BUFFER. Two parallel regexes against LBUFFER then RBUFFER catch builtin/command/env prefixes, var-assignments, stacked -E/-H/-i/-n/-u flags, quoted command words. Empty-BUFFER pulls the previous fc -ln -1 entry. 105 zunit @test cases.">
   <title>zsh-sudo &mdash; Engineering Report</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -92,17 +92,17 @@
         <div class="stat-card"><div class="stat-val accent">1</div><div class="stat-label">ZLE Widget</div></div>
         <div class="stat-card"><div class="stat-val">2</div><div class="stat-label">Env Vars</div></div>
         <div class="stat-card"><div class="stat-val">2</div><div class="stat-label">Match Sides (L/R)</div></div>
-        <div class="stat-card"><div class="stat-val green">101</div><div class="stat-label">zunit @test Cases</div></div>
-        <div class="stat-card"><div class="stat-val">6</div><div class="stat-label">Test Files</div></div>
+        <div class="stat-card"><div class="stat-val green">105</div><div class="stat-label">zunit @test Cases</div></div>
+        <div class="stat-card"><div class="stat-val">7</div><div class="stat-label">Test Files</div></div>
         <div class="stat-card"><div class="stat-val">21</div><div class="stat-label">Docs/Repo Gates</div></div>
-        <div class="stat-card"><div class="stat-val">34</div><div class="stat-label">Git Commits</div></div>
+        <div class="stat-card"><div class="stat-val">39</div><div class="stat-label">Git Commits</div></div>
       </div>
 
       <div style="margin:1.2rem 0;">
-        <p style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;font-family:'Orbitron',sans-serif;font-weight:700;">Test Density &mdash; 101 cases against 38 LOC</p>
+        <p style="font-size:11px;color:var(--text-muted);letter-spacing:0.5px;text-transform:uppercase;margin-bottom:4px;font-family:'Orbitron',sans-serif;font-weight:700;">Test Density &mdash; 105 cases against 38 LOC</p>
         <div class="bar-wrap" style="height:24px;">
           <div class="bar-fill green" style="width:100%;"></div>
-          <span class="bar-pct" style="font-size:12px;">2.66 zunit @test cases per LOC of widget body</span>
+          <span class="bar-pct" style="font-size:12px;">2.76 zunit @test cases per LOC of widget body</span>
         </div>
         <p style="font-size:10px;color:var(--text-muted);margin-top:4px;">The widget is small but every code path is a regex branch that must hold across edge cases &mdash; quoted commands, env-prefixed runs, stacked sudo flags, var-assignments before sudo, custom command names, RBUFFER-side matches. Test density tracks the regex's branching: <code>t-sudo-command-line.zsh</code> alone carries 81 cases.</p>
       </div>
@@ -274,7 +274,7 @@
       <!-- SECTION 8: TEST COVERAGE                -->
       <!-- ═══════════════════════════════════════ -->
       <h2 class="tutorial-title"><span class="step-hash">*</span>TEST COVERAGE</h2>
-      <p class="tutorial-subtitle">101 zunit <code>@test</code> cases across 6 test files. The heaviest is <code>t-sudo-command-line.zsh</code> at 81 cases &mdash; every regex branch is pinned by at least one before/after pair plus a no-op pair (calling the widget twice should round-trip). The remaining 5 files pin structural contracts: widget registration, env-var defaults, idempotent re-source, entrypoint stem, syntax cleanliness.</p>
+      <p class="tutorial-subtitle">105 zunit <code>@test</code> cases across 7 test files. The heaviest is <code>t-sudo-command-line.zsh</code> at 81 cases &mdash; every regex branch is pinned by at least one before/after pair plus a no-op pair (calling the widget twice should round-trip). The remaining 6 files pin structural contracts: widget registration, env-var defaults, idempotent re-source, entrypoint stem, syntax cleanliness, and buffer inertness (no glob expansion / command-substitution eval / UTF-8 mangling).</p>
 
       <table class="file-table">
         <thead><tr><th>Test file</th><th class="num">@test</th><th>Pins</th></tr></thead>
@@ -284,9 +284,10 @@
           <tr><td>tests/t-contract3.zsh</td><td class="num">5</td><td><code>ZPWR_SUDO_CMD</code> + <code>ZPWR_SUDO_REGEX</code> default to <code>sudo</code> when unset; existing values are not clobbered on re-source</td></tr>
           <tr><td>tests/t-contract4.zsh</td><td class="num">5</td><td>Entrypoint stem (<code>sudo.plugin.zsh</code>) matches plugin directory; idempotent re-source</td></tr>
           <tr><td>tests/t-contract.zsh</td><td class="num">3</td><td>Entrypoint parses cleanly under <code>zsh -n</code>; every <code>_*</code> completion file (vacuously zero) starts with <code>#compdef</code></td></tr>
+          <tr><td>tests/t-inert-buffer.zsh</td><td class="num">4</td><td>Buffer stays inert: add/remove-sudo never glob-expands a literal token, never evals a command substitution in the buffer, and round-trips multibyte UTF-8 commands unchanged</td></tr>
           <tr><td>tests/t-syntax.zsh</td><td class="num">1</td><td>Entrypoint parses under <code>zsh -n</code></td></tr>
         </tbody>
-        <tfoot><tr class="total-row"><td>6 zunit files</td><td class="num">101</td><td>+ 21 <code>.sh</code> doc-hygiene gates</td></tr></tfoot>
+        <tfoot><tr class="total-row"><td>7 zunit files</td><td class="num">105</td><td>+ 21 <code>.sh</code> doc-hygiene gates</td></tr></tfoot>
       </table>
 
       <hr class="section-rule">
@@ -334,7 +335,7 @@
     </main>
 
     <footer style="text-align:center;padding:2rem;font-size:10px;color:var(--text-muted);font-family:'Orbitron',sans-serif;letter-spacing:2px;">
-      ZSH-SUDO ENGINEERING REPORT &middot; 38 PLUGIN LOC &middot; 1 ZLE WIDGET &middot; 2 ENV VARS &middot; LBUFFER + RBUFFER STRIP &middot; 101 ZUNIT TESTS &middot; 21 DOC GATES &middot; MENKETECHNOLOGIES
+      ZSH-SUDO ENGINEERING REPORT &middot; 38 PLUGIN LOC &middot; 1 ZLE WIDGET &middot; 2 ENV VARS &middot; LBUFFER + RBUFFER STRIP &middot; 105 ZUNIT TESTS &middot; 21 DOC GATES &middot; MENKETECHNOLOGIES
     </footer>
   </div>
 
