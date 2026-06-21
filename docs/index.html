@@ -98,11 +98,21 @@ bindkey '\e\e' sudo-command-line</pre>
         <p>Override the prepended command (e.g. <code>doas</code>) by setting both variables to the same string before the plugin loads:</p>
 <pre>export ZPWR_SUDO_REGEX='doas'
 export ZPWR_SUDO_CMD='doas'</pre>
-        <p><code>ZPWR_SUDO_CMD</code> is prepended; <code>ZPWR_SUDO_REGEX</code> is what the parser hunts for when stripping.</p>
+        <p><code>ZPWR_SUDO_CMD</code> is prepended; <code>ZPWR_SUDO_REGEX</code> is what the parser hunts for when stripping. Both default to <code>sudo</code> and are only set when unset, so they never clobber a user override.</p>
+        <p>The two vars are decoupled so the strip side can use alternation while the prepend side picks one canonical tool. Strip either <code>sudo</code> or <code>doas</code> but always prepend <code>sudo</code>:</p>
+<pre>export ZPWR_SUDO_CMD='sudo'
+export ZPWR_SUDO_REGEX='sudo|doas'</pre>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>ZPWR_SUDO_CMD</code></td><td>String prepended when there's nothing to strip. Default <code>sudo</code>.</td></tr>
+            <tr><td><code>ZPWR_SUDO_REGEX</code></td><td>Regex fragment the strip side hunts for. Default <code>sudo</code>.</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="tutorial-section">
         <h2>State table</h2>
+        <p>Three behaviours, decided in this order: empty line &rarr; history recall; line already has a sudo prefix &rarr; strip; otherwise &rarr; prepend.</p>
         <table class="example-tbl">
           <tbody>
             <tr><td><code>apt update</code></td><td>&rarr; <code>sudo apt update</code></td></tr>
@@ -111,6 +121,55 @@ export ZPWR_SUDO_CMD='doas'</pre>
           </tbody>
         </table>
         <p>The regex engine handles quoted commands, <code>builtin</code>/<code>command</code> prefixes, <code>env</code> with flags, leading variable assignments, and stacked sudo options (<code>-u root -E</code>, etc).</p>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Worked examples</h2>
+        <p>Every row below corresponds to a pinned test case in <code>tests/t-sudo-command-line.zsh</code> &mdash; the toggle is verified, not hypothetical.</p>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td><code>ls -la</code></td><td>&rarr; <code>sudo ls -la</code></td></tr>
+            <tr><td><code>sudo -u root ls</code></td><td>&rarr; <code>ls</code> (value flag dropped)</td></tr>
+            <tr><td><code>sudo -EH ls</code></td><td>&rarr; <code>ls</code> (stacked boolean flags)</td></tr>
+            <tr><td><code>FOO=bar BAZ=qux sudo ls</code></td><td>&rarr; <code>ls</code> (leading var-assignments dropped)</td></tr>
+            <tr><td><code>command sudo ls</code></td><td>&rarr; <code>ls</code> (wrapper word dropped)</td></tr>
+            <tr><td><code>builtin command sudo ls</code></td><td>&rarr; <code>ls</code></td></tr>
+            <tr><td><code>sudo env -i bash</code></td><td>&rarr; <code>bash</code> (env wrapper dropped)</td></tr>
+            <tr><td><code>sudo sudo sudo ls</code></td><td>&rarr; <code>ls</code> (stacked sudo collapsed)</td></tr>
+            <tr><td><code>\\sudo ls</code></td><td>&rarr; <code>ls</code> (backslash-quoted sudo)</td></tr>
+            <tr><td><code>&nbsp;&nbsp;sudo ls</code></td><td>&rarr; <code>&nbsp;&nbsp;ls</code> (leading whitespace preserved)</td></tr>
+            <tr><td><code>sudoers ls</code></td><td>&rarr; <code>sudo sudoers ls</code> (no false strip)</td></tr>
+          </tbody>
+        </table>
+        <p>The strip path only fires when a real sudo token is present &mdash; a command word that merely <em>starts with</em> <code>sudo</code> (like <code>sudoers</code>) is left alone and gets sudo prepended instead.</p>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Cursor position</h2>
+        <p>ZLE splits the command line at the cursor into <code>$LBUFFER</code> (left of cursor) and <code>$RBUFFER</code> (right of cursor). The widget tries the strip regex against <code>$LBUFFER</code> first, then falls through to <code>$RBUFFER</code>. Because the rewrite happens on whichever side matched &mdash; not the whole line &mdash; toggling works whether the cursor is at the end of the line, at column 0 (after <code>^A</code>), or anywhere a clean sudo prefix sits on one side. Hit the chord twice and the line round-trips to its original state.</p>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Notes</h2>
+        <ul>
+          <li>The entrypoint is <code>sudo.plugin.zsh</code> (not <code>zsh-sudo.plugin.zsh</code>) so oh-my-zsh's stock <code>plugins/sudo</code> auto-load can find it.</li>
+          <li>The plugin registers the widget with <code>zle -N sudo-command-line</code> but does <strong>not</strong> bind a key &mdash; the chord is yours to choose.</li>
+          <li>Empty-line recall uses <code>builtin fc -ln -1</code>, which prints the previous history entry with no line number and no trailing newline; <code>builtin</code> guards against a user-aliased <code>fc</code>.</li>
+          <li>The buffer is rewritten as inert string data, never <code>eval</code>'d: glob tokens stay literal, command substitutions are not run at toggle time, and multibyte UTF-8 commands round-trip unchanged.</li>
+          <li>No external dependencies &mdash; the widget runs entirely inside zsh's match engine. Identical behaviour on macOS, Linux, BSD, and WSL.</li>
+        </ul>
+      </section>
+
+      <section class="tutorial-section">
+        <h2>Troubleshooting</h2>
+        <table class="example-tbl">
+          <tbody>
+            <tr><td>Chord does nothing</td><td>You haven't bound a key &mdash; the plugin ships no default. Add <code>bindkey '^N' sudo-command-line</code>.</td></tr>
+            <tr><td><code>doas</code> not stripped</td><td>Set <code>ZPWR_SUDO_REGEX</code> and <code>ZPWR_SUDO_CMD</code> before the plugin loads. The default regex matches only <code>sudo</code>.</td></tr>
+            <tr><td>Strip fails mid-line</td><td>Place the cursor at the start or end of the line. A cursor landing inside the sudo flag block splits the prefix across <code>$LBUFFER</code>/<code>$RBUFFER</code> so neither side matches and the fallthrough prepends another sudo.</td></tr>
+            <tr><td>Override ignored</td><td>The env vars are read at source-time and only set when unset. Export them <em>before</em> sourcing the plugin; re-sourcing won't clobber an existing value.</td></tr>
+          </tbody>
+        </table>
       </section>
 
       <section class="tutorial-section">

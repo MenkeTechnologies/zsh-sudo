@@ -95,7 +95,7 @@
         <div class="stat-card"><div class="stat-val green">105</div><div class="stat-label">zunit @test Cases</div></div>
         <div class="stat-card"><div class="stat-val">7</div><div class="stat-label">Test Files</div></div>
         <div class="stat-card"><div class="stat-val">21</div><div class="stat-label">Docs/Repo Gates</div></div>
-        <div class="stat-card"><div class="stat-val">39</div><div class="stat-label">Git Commits</div></div>
+        <div class="stat-card"><div class="stat-val">41</div><div class="stat-label">Git Commits</div></div>
       </div>
 
       <div style="margin:1.2rem 0;">
@@ -234,12 +234,23 @@
           <tr><td><code>FOO=bar sudo apt update</code></td><td><code>apt update</code></td></tr>
           <tr><td><code>sudo env -i bash</code></td><td><code>bash</code></td></tr>
           <tr><td><code>sudo env FOO=bar apt update</code></td><td><code>apt update</code></td></tr>
-          <tr><td><code>command sudo apt update</code></td><td><code>apt update</code></td></tr>
-          <tr><td><code>builtin command sudo apt update</code></td><td><code>apt update</code></td></tr>
-          <tr><td><code>"sudo" apt update</code></td><td><code>apt update</code></td></tr>
-          <tr><td>(with <code>ZPWR_SUDO_CMD=doas</code>) <code>apt update</code></td><td><code>doas apt update</code></td></tr>
+          <tr><td><code>command sudo ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>builtin command sudo ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>'command' sudo ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>\\sudo ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>sudo sudo sudo ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>FOO=bar BAZ=qux sudo ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>sudo env -i bash</code></td><td><code>bash</code></td></tr>
+          <tr><td><code>sudo env -S VAR=val ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>FOO=bar command sudo -E env -i BAZ=qux ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>sudo -u root -E env ls</code></td><td><code>ls</code></td></tr>
+          <tr><td><code>&nbsp;&nbsp;sudo ls</code> (leading spaces)</td><td><code>&nbsp;&nbsp;ls</code> (spaces kept)</td></tr>
+          <tr><td><code>sudoers ls</code> (sudo as substring)</td><td><code>sudo sudoers ls</code> (no false strip)</td></tr>
+          <tr><td>(with <code>ZPWR_SUDO_CMD=doas</code>) <code>ls -la</code></td><td><code>doas ls -la</code></td></tr>
+          <tr><td>(with <code>ZPWR_SUDO_REGEX=sudo|doas</code>) <code>doas ls</code></td><td><code>ls</code></td></tr>
         </tbody>
       </table>
+      <p style="font-size:11px;color:var(--text-muted);margin-top:0.5rem;">Every row above corresponds to at least one <code>@test</code> in <code>tests/t-sudo-command-line.zsh</code>. The <code>sudoers</code> row pins the non-strip safety property &mdash; a command word that merely <em>starts with</em> the sudo string is not treated as a sudo invocation, because the regex requires the sudo token to be followed by whitespace, a flag, or end-of-prefix before the real command.</p>
 
       <hr class="section-rule">
 
@@ -304,9 +315,12 @@
         <div class="feature-card"><h4>Decoupled CMD and REGEX env vars</h4><p>The prepend string is one var; the strip pattern is another. Lets the strip side support alternation (<code>(sudo|doas)</code>) while the prepend side picks one canonical tool. Most users set both to the same string; power users get the flexibility.</p></div>
         <div class="feature-card"><h4>No bundled keybinding</h4><p>The plugin registers the widget but does <strong>not</strong> bind a key. The user picks their chord. Stock oh-my-zsh sudo binds Esc Esc; this plugin doesn't force that choice because Esc Esc can conflict with vi-mode users hitting double-Esc to leave insert mode.</p></div>
         <div class="feature-card"><h4><code>builtin fc -ln -1</code> for history recall</h4><p><code>fc -ln -1</code> prints the most recent history entry with no leading line number and no trailing newline &mdash; exactly the shape needed for direct LBUFFER assignment. <code>builtin</code> guards against user aliasing of <code>fc</code>.</p></div>
-        <div class="feature-card"><h4>Var-assignment support</h4><p><code>FOO=bar sudo cmd</code> is a real pattern (env-vars-for-sudo). The regex preserves the assignments through the strip so toggling on <code>FOO=bar sudo cmd</code> gives <code>FOO=bar cmd</code> &mdash; not <code>cmd</code>. The user keeps their env intent.</p></div>
+        <div class="feature-card"><h4>Var-assignment tolerance</h4><p><code>FOO=bar sudo cmd</code> is a real pattern (env-vars-for-sudo). The regex matches leading var-assignments as part of the sudo prefix so the strip recognises them &mdash; toggling on <code>FOO=bar sudo ls</code> yields <code>ls</code> (the assignments are captured in the dropped prefix group, only <code>$match[1]</code> leading whitespace and <code>$match[-1]</code> trailing command survive). Pinned by <code>remove sudo with multiple env vars prefix</code> in the suite.</p></div>
         <div class="feature-card"><h4>Quoted sudo support</h4><p>Each occurrence of the sudo command is wrapped in <code>[\\\"\']*</code> &mdash; matches bare, backslash-escaped, double-quoted, and single-quoted sudo names. Real scripts run <code>"sudo" apt update</code> for various reasons; the toggle handles all of them.</p></div>
         <div class="feature-card"><h4>Single-file plugin</h4><p>No autoload, no completions, no extra files. The widget body is small enough that splitting into <code>autoload/sudo-command-line</code> would add ceremony without value. One file, one widget, one fn.</p></div>
+        <div class="feature-card"><h4>Entrypoint is <code>sudo.plugin.zsh</code></h4><p>The entrypoint is <code>sudo.plugin.zsh</code>, not <code>zsh-sudo.plugin.zsh</code>. This matches oh-my-zsh's stock <code>plugins/sudo</code> stem so an omz auto-load can find it. <code>tests/t-contract2.zsh</code> pins this exact filename &mdash; renaming to match the repo would break omz auto-load. <code>tests/t-contract.zsh</code> additionally tolerates the <code>zsh-</code> dir prefix so the install path stays copy-pasteable.</p></div>
+        <div class="feature-card"><h4>No false-positive strip</h4><p>The sudo block is wrapped in <code>(...)+</code> &mdash; at least one sudo invocation must match for the strip path to fire. A command word that only <em>starts with</em> the sudo string, like <code>sudoers</code>, is left alone and gets a sudo prepended instead. Pinned by <code>do not strip sudoers as sudo</code>.</p></div>
+        <div class="feature-card"><h4>Inert buffer rewrite</h4><p>The rewrite assigns <code>$match[1]$match[-1]</code> (or <code>$ZPWR_SUDO_CMD $LBUFFER</code>) as quoted string data &mdash; never <code>eval</code>'d. Glob tokens stay literal, command substitutions are not executed at toggle time, and multibyte UTF-8 command words round-trip byte-for-byte. <code>tests/t-inert-buffer.zsh</code> pins all three.</p></div>
       </div>
 
       <hr class="section-rule">
@@ -321,7 +335,7 @@
         <div class="mapping-card"><h4>Forgot sudo</h4><p>Ran <code>apt update</code>, got <code>Permission denied</code>. Hit the chord on empty BUFFER &rarr; <code>sudo apt update</code>. Hit Enter.</p></div>
         <div class="mapping-card"><h4>Wrong sudo flag</h4><p>Typed <code>sudo -u nobody apt update</code> and meant <code>sudo apt update</code>. Hit the chord (strip) + chord (re-prepend) &rarr; clean <code>sudo apt update</code>.</p></div>
         <div class="mapping-card"><h4>Cross-tool compat</h4><p>Configured for <code>doas</code> on an OpenBSD box and <code>sudo</code> on Linux. Same chord, same UX, no muscle-memory tax across machines.</p></div>
-        <div class="mapping-card"><h4>Plugin stack hub</h4><p>One of 5 plugins under <code>MenkeTechnologiesMeta</code>. The smallest by LOC but the canonical example of "one fn, one chord, BUFFER rewrite" &mdash; the same shape as <code>zsh-sed-sub</code>, <code>zsh-expand</code>, and <code>zsh-git-acp</code>.</p></div>
+        <div class="mapping-card"><h4>Plugin stack hub</h4><p>One of the zsh plugins under the <code>MenkeTechnologiesMeta</code> umbrella. The smallest by LOC but the canonical example of "one fn, one chord, BUFFER rewrite" &mdash; the same shape as <code>zsh-sed-sub</code>, <code>zsh-expand</code>, and <code>zsh-git-acp</code>.</p></div>
       </div>
 
       <hr class="section-rule">
